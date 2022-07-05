@@ -13,7 +13,7 @@
 Robot Operating System (ROS) is a powerful software tool to control robots. This project uses ROS to create a software package that can control an iRobot to complete a set of tasks as noted below.
 
 1. Move freely in the given indoor environment.
-2. Using the left and right bump sensors, turn around whenit touches an obstacle.
+2. Using the left and right bump sensors, turn around when it touches an obstacle.
 3. Turn around when an external switch is pressed.
 4. Respond to joystick input for manual control.
 5. Do a celebration ceremony motion triggered by one of the joystick buttons.
