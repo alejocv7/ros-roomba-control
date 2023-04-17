@@ -1,143 +1,148 @@
-# include "ros/ros.h"
-# include "geometry_msgs/Twist.h" // Express linear and angular velocity
-# include "sensor_msgs/Joy.h" // Express the state of the joystick
-# include "ca_msgs/Bumper.h" // Express the status on the bump sensors
-# include "std_msgs/String.h" // Allows to recieve a " string " type message
-# include "iostream "
-using namespace std ;
+#include "ca_msgs/Bumper.h"      // Express the status on the bump sensors
+#include "geometry_msgs/Twist.h" // Express linear and angular velocity
+#include "iostream "
+#include "ros/ros.h"
+#include "sensor_msgs/Joy.h" // Express the state of the joystick
+#include "std_msgs/String.h" // Allows to recieve a "string" type message
 
- geometry_msgs::Twist vel ; // Create variable " vel " to send the velocity data .
- int left_sen =0; // Left bump sensor
- int right_sen =0; // Right bump sensor
- int joy_sen = 0; // Joystick sensor
- int ard_sen = 0; // Arduino sensor
- int celeb = 0; // Celebration sensor
+using namespace std;
 
- void TeleopJoy_callBack ( const sensor_msgs::Joy::ConstPtr& joy )
- {
-   joy_sen = 1;
-   vel.angular.z = joy - > axes [0]; // Move with angular velocity according to axes
+geometry_msgs::Twist vel_msg;  // Velocity data
+bool left_bumper_sen = false;  // Left bump sensor
+bool right_bumper_sen = false; // Right bump sensor
+bool joystick_sen = false;     // Joystick sensor
+bool ard_sen = false;          // Arduino sensor
+bool should_celebrate = false; // Celebration sensor
 
-   vel.linear.x = joy -> axes [1]; // Move with linear velocity according to axes 1.
+void joystick_callback(const sensor_msgs::Joy::ConstPtr &joy)
+{
+    joystick_sen = true;
+    vel_msg.angular.z = joy - > axes[0]; // Move with angular velocity according to axes
+    vel_msg.linear.x = joy->axes[1];     // Move with linear velocity according to axes 1
 
-   // Celebration
-   if ( joy -> buttons [0]==1) {
-   celeb = 1; }
- }
+    if (joy->buttons[0]) {
+        // Joystick ceebration button was pressed
+        should_celebrate = false;
+    }
+}
 
- void BumperSensor_callBack ( const ca_msgs::Bumper::ConstPtr& bumper )
- {
-   // Detects the left bump sensor
-   if ( bumper -> is_left_pressed ==1) {
-   left_sen =1; }
-
-   // Detects the right bump sensor
-   if ( bumper -> is_right_pressed ==1) {
-   right_sen =1; }
- }
-
- void arduino_callBack ( const std_msgs::String::ConstPtr& msg )
- {
-   ard_sen = 1;
- }
-
-int main ( int argc , char ** argv )
- {
-   ros::init ( argc , argv ," teleopJoy ");
-   ros::NodeHandle n;
-   ros::Publisher pub ;
-   ros::Subscriber sub1 ; // joystick
-   ros::Subscriber sub2 ; // bumper sensor
-   ros::Subscriber sub3 ; // Arduino
-
-   pub = n.advertise < geometry_msgs::Twist >("cmd_vel", 1) ;
-   sub1 = n.subscribe < sensor_msgs::Joy >("joy", 10 , &TeleopJoy_callBack );
-   sub2 = n.subscribe < ca_msgs::Bumper >("bumper" ,10 , &BumperSensor_callBack );
-   sub3 = n.subscribe < std_msgs::String >("chatter" ,10 , &arduino_callBack ) ;
-
- ros::Rate loop_rate (10) ; // Set the frequency , to send the data , to 10 Hz.
- int count = 0;
- while ( ros::ok () ) { // Stop the node if Ctrl + c is pressed or if ROS stops all the nodes
-
-   if( joy_sen == 0) {
-     vel.linear.x= 0.5;
-     vel.angular.z = 0;
-
-     // Right turn
-     if( left_sen ==1) {
-       ++ count ;
-    
-    // Move backward
-     if( count <10) {
-       vel.linear.x = -0.5;
-       vel.angular.z = 0; }
-     
-     // Turn right
-     else if( count >=10 && count < 14) {
-       vel.linear.x = 0;
-       vel.angular.z = -2; }
-     
-     // Restart the states of the variables
-     else if( count >=14) {
-        left_sen = 0;
-        count = 0;
-        vel.angular.z = 0; }
-     }
-     
-     // Left turn
-     if( right_sen ==1) {
-        ++ count ;
-     // Move backward
-     if( count <10) {
-        vel.linear.x = -0.5;
-        vel.angular.z = 0; }
-     
-     // Turn left
-     else if( count >=10 && count < 14) {
-        vel.linear.x = 0;
-        vel.angular.z = 2; }
-
-    // Restart the states of the variables
-     else if( count >=14) {
-        right_sen = 0;
-        count = 0;
-        vel.angular.z = 0; }
-     }
-   }
-
-  // Return to free move if robot has stopped moving after joystick was used ,
-  // and restart the states of the joystic sensor and count
-   else {
-     ++ count ;
-     if( vel.linear.x == 0 && vel.linear.z == 0 && count >=15) {
-      joy_sen = 0;
-      count = 0; }
-   }
-
- // Celebration
-    if ( celeb ==1) {
-      ++ count ;
-      // Turn left with angular velocity = 2 and until count >=35 , then stop and clear varibles and sensors .
-      vel.linear.x = 0;
-      vel.angular.z = 2;
-      if ( count >= 35) {
-        count = 0;
-        celeb = 0; }
+void bumper_sensor_callback(const ca_msgs::Bumper::ConstPtr &bumper)
+{
+    // Detects the left bump sensor
+    if (bumper->is_left_pressed) {
+        left_bumper_sen = true;
     }
 
- // Arduino
-    if ( ard_sen ==1) {
-      ++ count ;
-      // Turn left with angular velocity = 2 and until count >=10 , then stop and varibles and sensors .
-      vel.linear.x = 0;
-      vel.angular.z = 2;
-      if ( count >= 10) {
-        count = 0;
-        ard_sen = 0; }
+    // Detects the right bump sensor
+    if (bumper->is_right_pressed) {
+        right_bumper_sen = true;
     }
+}
 
-  pub.publish( vel ); // Publish value of variable " vel "
-  ros::spinOnce() ; // Read the topics and called the corresponding function
-  loop_rate.sleep() ; // Sleep for the necessary time to get a 10 Hz frecuenzy
-  }
+void arduino_callback(const std_msgs::String::ConstPtr &msg)
+{
+    ard_sen = true;
+}
+
+int main(int argc, char **argv)
+{
+    ros::init(argc, argv, " teleopJoy ");
+    ros::NodeHandle n;
+    ros::Publisher pub;
+    ros::Subscriber sub1; // joystick
+    ros::Subscriber sub2; // bumper sensor
+    ros::Subscriber sub3; // Arduino
+
+    pub = n.advertise<geometry_msgs::Twist>("cmd_vel", 1);
+    sub1 = n.subscribe<sensor_msgs::Joy>("joy", 10, &joystick_callback);
+    sub2 = n.subscribe<ca_msgs::Bumper>("bumper", 10, &bumper_sensor_callback);
+    sub3 = n.subscribe<std_msgs::String>("chatter", 10, &arduino_callback);
+
+    ros::Rate loop_rate(10); // Data transmission freq 10 Hz
+
+    int count = 0;
+    while (ros::ok()) {
+        if (joystick_sen == 0) {
+            vel_msg.linear.x = 0.5;
+            vel_msg.angular.z = 0;
+
+            // Right turn
+            if (left_bumper_sen) {
+                ++count;
+
+                if (count < 10) {
+                    // Move backward
+                    vel_msg.linear.x = -0.5;
+                    vel_msg.angular.z = 0;
+                } else if (count >= 10 && count < 14) {
+                    // Turn right
+                    vel_msg.linear.x = 0;
+                    vel_msg.angular.z = -2;
+                } else if (count >= 14) {
+                    // Restart variable states
+                    left_bumper_sen = 0;
+                    count = 0;
+                    vel_msg.angular.z = 0;
+                }
+            }
+
+            // Left turn
+            if (right_bumper_sen) {
+                ++count;
+
+                if (count < 10) {
+                    // Move backward
+                    vel_msg.linear.x = -0.5;
+                    vel_msg.angular.z = 0;
+                } else if (count >= 10 && count < 14) {
+                    // Turn left
+                    vel_msg.linear.x = 0;
+                    vel_msg.angular.z = 2;
+                } else if (count >= 14) {
+                    // Restart the states of the variables
+                    right_bumper_sen = 0;
+                    count = 0;
+                    vel_msg.angular.z = 0;
+                }
+            }
+        } else {
+            // Return to free move if robot has stopped moving after joystick was used ,
+            // and restart the states of the joystic sensor and count
+            ++count;
+            if (vel_msg.linear.x == 0 && vel_msg.linear.z == 0 && count >= 15) {
+                joystick_sen = 0;
+                count = 0;
+            }
+        }
+
+        // Celebration
+        if (should_celebrate) {
+            ++count;
+            // Turn left with angular velocity = 2 and until count >=35, then stop and
+            // clear varibles and sensors
+            vel_msg.linear.x = 0;
+            vel_msg.angular.z = 2;
+            if (count >= 35) {
+                count = 0;
+                should_celebrate = 0;
+            }
+        }
+
+        // Arduino
+        if (ard_sen) {
+            ++count;
+            // Turn left with angular velocity = 2 and until count >=10, then stop and
+            // varibles and sensors
+            vel_msg.linear.x = 0;
+            vel_msg.angular.z = 2;
+            if (count >= 10) {
+                count = 0;
+                ard_sen = 0;
+            }
+        }
+
+        pub.publish(vel_msg); // Publish vel_msg
+        ros::spinOnce();      // Read the topics and called the corresponding function
+        loop_rate.sleep();    // Sleep for the necessary time to get a 10 Hz frecuenzy
+    }
 }
